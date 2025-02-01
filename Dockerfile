@@ -11,6 +11,11 @@ ARG CALIBREWEB_RELEASE
 LABEL build_version="Linuxserver.io version:- ${VERSION} Build-date:- ${BUILD_DATE}"
 LABEL maintainer="notdriz"
 
+COPY kepubify-linux-64bit /tmp/kepubify
+# COPY covergen-linux-64bit /tmp/covergen
+# COPY seriesmeta-linux-64bit /tmp/seriesmeta
+COPY calibreweb-src-0.6.24.tar.gz /tmp/calibre-web.tar.gz
+
 RUN \
   echo "**** install build packages ****" && \
   apt-get update && \
@@ -36,26 +41,32 @@ RUN \
     CALIBREWEB_RELEASE=$(curl -sX GET "https://api.github.com/repos/janeczku/calibre-web/releases/latest" \
     | awk '/tag_name/{print $4;exit}' FS='[""]'); \
   fi && \
-  curl -o \
-    /tmp/calibre-web.tar.gz -L \
-    https://github.com/janeczku/calibre-web/archive/${CALIBREWEB_RELEASE}.tar.gz && \
-  mkdir -p \
-    /app/calibre-web && \
-  tar xf \
-    /tmp/calibre-web.tar.gz -C \
+  CALIBREWEB_TAR_URL="https://codeload.github.com/janeczku/calibre-web/tar.gz/refs/tags/${CALIBREWEB_RELEASE}" && \
+  CALIBREWEB_TMP_TAR="/tmp/calibre-web.tar.gz" && \
+  if [ ! -f ${CALIBREWEB_TMP_TAR} ]; then \
+    curl -o "${CALIBREWEB_TMP_TAR}" -L "${CALIBREWEB_TAR_URL}" ; \
+  fi && \
+  mkdir -p /app/calibre-web && \
+  tar zxf \
+    "${CALIBREWEB_TMP_TAR}" -C \
     /app/calibre-web --strip-components=1 && \
   cd /app/calibre-web && \
   python3 -m venv /lsiopy && \
-  pip install -U --no-cache-dir \
-    pip \
-    wheel && \
-  pip install -U --no-cache-dir --find-links https://wheel-index.linuxserver.io/ubuntu/ -r \
-    requirements.txt -r \
-    optional-requirements.txt && \
+  python3 -m pip install -U --no-cache-dir pip wheel && \
+  python3 -m pip install -U --no-cache-dir --find-links https://wheel-index.linuxserver.io/ubuntu/ \
+    -r requirements.txt \
+    -r optional-requirements.txt && \
+  cd - && \
   echo "***install kepubify" && \
+  KEPUBIFY_TMP="/tmp/kepubify" && \
+  KEPUBIFY_DEST="/usr/bin/kepubify" && \
+  if [ -f "${KEPUBIFY_TMP}" ]; then \
+    cp "${KEPUBIFY_TMP}" "${KEPUBIFY_DEST}" && \
+    chmod +x "${KEPUBIFY_DEST}" ; \
+  fi && \
   if [ -z ${KEPUBIFY_RELEASE+x} ]; then \
     KEPUBIFY_RELEASE=$(curl -sX GET "https://api.github.com/repos/pgaskin/kepubify/releases/latest" \
-    | awk '/tag_name/{print $4;exit}' FS='[""]'); \
+      | awk '/tag_name/{print $4;exit}' FS='[""]'); \
   fi && \
   curl -o \
     /usr/bin/kepubify -L \
